@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Interactive Class Diagram</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape-pdf/0.3.0/cytoscape.pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        #cy {
+            width: 100%;
+            height: 800px;
+            position: absolute;
+            top: 0px;
+            left: 0px;
+        }
+
+        .section-label {
+            position: absolute;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 8px;
+            border-radius: 4px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ccc;
+        }
+
+        #field-staff-label {
+            top: 20px;
+            left: 50px;
+            color: #4a90e2;
+        }
+
+        #common-label {
+            top: 20px;
+            left: 45%;
+            color: #7ed321;
+        }
+
+        #customer-facing-label {
+            top: 20px;
+            right: 50px;
+            color: #f5a623;
+        }
+
+
+        #toolbar{
+                    position: absolute;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 8px;
+            border-radius: 4px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ccc;
+            visibility: hidden;
+        }
+
+    </style>
+</head>
+<body>
+    <div>
+        <nav id="toolbar">
+            <button id="export-png">Export to PNG</button>
+            <button id="export-pdf">Export to PDF</button>
+        </nav>
+    </div>
+    <div></div>
+    <div id="field-staff-label" class="section-label">Field Staff</div>
+    <div id="common-label" class="section-label">Common Components</div>
+    <div id="customer-facing-label" class="section-label">Customer Facing</div>
+    <div id="cy"></div>
+
+    <script>
+    
+        const layoutConfig = {
+            name: 'preset',
+            padding: 50,
+            spacingFactor: 1.5,
+            animate: true,
+            animationDuration: 500,
+            fit: true
+        };
+
+        const nodeStyle = [{
+            selector: 'node',
+            style: {
+                'shape': 'rectangle',
+                'background-color': 'data(backgroundColor)',
+                'border-color': 'data(borderColor)',
+                'border-width': 2,
+                'width': 'label',
+                'height': 'label',
+                'padding': '20px',
+                'label': 'data(label)',
+                'text-valign': 'center',
+                'text-halign': 'center',
+                'font-size': '14px',
+                'font-weight': 'bold',
+                'text-wrap': 'wrap',
+                'text-max-width': 200
+            }
+        }, {
+            selector: 'edge',
+            style: {
+                'width': 2,
+                'line-color': 'data(color)',
+                'target-arrow-color': 'data(color)',
+                'target-arrow-shape': 'triangle',
+                'curve-style': 'bezier',
+                'label': 'data(label)',
+                'font-size': '12px',
+                'text-rotation': 'autorotate',
+                'text-margin-y': -10
+            }
+        }, {
+            selector: 'node[type="interface"]',
+            style: {
+                'border-style': 'dashed'
+            }
+        }];
+
+        // Initialize cytoscape
+        const cy = cytoscape({
+            container: document.getElementById('cy'),
+            elements: [],
+            style: nodeStyle,
+            layout: layoutConfig,
+            wheelSensitivity: 0.2
+        });
+
+        // Add the class data
+        const classData = {
+            // This will be populated by the Python script
+        };
+
+        // Add nodes and edges
+        cy.add(classData.nodes);
+        cy.add(classData.edges);
+
+        // Function to organize nodes into sections
+        function organizeNodesIntoSections() {
+            const fieldStaffY = 100;
+            const commonY = 100;
+            const customerFacingY = 100;
+            const verticalSpacing = 150; // 1.5rem converted to pixels
+
+            const fieldStaffNodes = cy.nodes().filter(node => 
+                node.data('label').toLowerCase().startsWith('field') || 
+                node.data('label').toLowerCase().startsWith('staff')
+            );
+            
+            const customerFacingNodes = cy.nodes().filter(node => 
+                node.data('label').toLowerCase().startsWith('customer') || 
+                node.data('label').toLowerCase().startsWith('client')
+            );
+            
+            const commonNodes = cy.nodes().filter(node => 
+                node.data('label').toLowerCase().startsWith('common') || 
+                node.data('label').toLowerCase().startsWith('shared')
+            );
+
+            // Position field staff nodes
+            fieldStaffNodes.forEach((node, index) => {
+                node.position({
+                    x: 200,
+                    y: fieldStaffY + (index * verticalSpacing)
+                });
+            });
+
+            // Position common nodes
+            commonNodes.forEach((node, index) => {
+                node.position({
+                    x: cy.width() / 2,
+                    y: commonY + (index * verticalSpacing)
+                });
+            });
+
+            // Position customer facing nodes
+            customerFacingNodes.forEach((node, index) => {
+                node.position({
+                    x: cy.width() - 200,
+                    y: customerFacingY + (index * verticalSpacing)
+                });
+            });
+        }
+
+        // Apply the organization after the graph is loaded
+        cy.ready(() => {
+            organizeNodesIntoSections();
+            cy.fit();
+            cy.center();
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            cy.fit();
+            cy.center();
+        });
+
+
+
+        document.getElementById('export-png').addEventListener('click', () => {
+            const pngContent = cy.png();
+            const link = document.createElement('a');
+            link.href = pngContent;
+            link.download = 'diagram.png';
+            link.click();
+        });
+
+        document.getElementById('export-pdf').addEventListener('click', async () => {
+                try {
+                    // Create a canvas with the diagram
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Set canvas size to match diagram
+                    const { w, h } = cy.png({ scale: 2, full: true });
+                    canvas.width = w;
+                    canvas.height = h;
+                    
+                    // Create an image from the PNG
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.drawImage(img, 0, 0);
+                        
+                        // Convert to PDF
+                        const imgData = canvas.toDataURL('image/png');
+                        const pdf = new jspdf.jsPDF({
+                            orientation: 'landscape',
+                            unit: 'px',
+                            format: [w, h]
+                        });
+                        pdf.addImage(imgData, 'PNG', 0, 0, w, h);
+                        pdf.save('diagram.pdf');
+                    };
+                    img.src = cy.png({ scale: 2, full: true });
+                } catch (error) {
+                    console.error('PDF Export failed:', error);
+                    alert('Failed to export PDF. Check console for details.');
+                }
+            });
+
+    </script>
+    <script>
+
+            function saveLayout() {
+            const positions = {};
+            cy.nodes().forEach(node => {
+                positions[node.id()] = node.position();
+            });
+            localStorage.setItem('diagramLayout', JSON.stringify(positions));
+            alert('Layout saved successfully!');
+        }
+
+        function loadLayout() {
+            const savedLayout = localStorage.getItem('diagramLayout');
+            if (savedLayout) {
+                const positions = JSON.parse(savedLayout);
+                cy.nodes().forEach(node => {
+                    const pos = positions[node.id()];
+                    if (pos) {
+                        node.position(pos);
+                    }
+                });
+                cy.fit(); // Adjust view to fit the loaded layout
+                alert('Layout loaded successfully!');
+            } else {
+                alert('No saved layout found!');
+            }
+        }
+
+
+        document.getElementById('export-png').addEventListener('click', () => {
+            try {
+                const pngContent = cy.png({
+                    scale: 2,  // Higher resolution
+                    full: true  // Capture entire graph
+                });
+                const link = document.createElement('a');
+                link.href = pngContent;
+                link.download = 'diagram.png';
+                link.click();
+            } catch (error) {
+                console.error('PNG Export failed:', error);
+                alert('Failed to export PNG. Check console for details.');
+            }
+        });
+
+        document.getElementById('export-pdf').addEventListener('click', async () => {
+        try {
+            // Create a canvas with the diagram
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size to match diagram
+            const { w, h } = cy.png({ scale: 2, full: true });
+            canvas.width = w;
+            canvas.height = h;
+            
+            // Create an image from the PNG
+            const img = new Image();
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0);
+                
+                // Convert to PDF
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jspdf.jsPDF({
+                    orientation: 'landscape',
+                    unit: 'px',
+                    format: [w, h]
+                });
+                pdf.addImage(imgData, 'PNG', 0, 0, w, h);
+                pdf.save('diagram.pdf');
+            };
+            img.src = cy.png({ scale: 2, full: true });
+        } catch (error) {
+            console.error('PDF Export failed:', error);
+            alert('Failed to export PDF. Check console for details.');
+        }
+    });
+
+        // Keyboard shortcut for export
+        document.addEventListener('keydown', async (event) => {
+            // Check for Ctrl+Shift+E
+            if (event.ctrlKey && event.shiftKey && event.key === 'E') {
+                event.preventDefault();  // Prevent default browser behavior
+
+                // Create a custom export dialog
+                const exportDialog = document.createElement('div');
+                exportDialog.innerHTML = `
+                    <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                                background: white; border: 2px solid #333; padding: 20px; 
+                                box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 1000;">
+                        <h3>Export Diagram</h3>
+                        <button id="export-png-dialog" style="margin: 10px; padding: 10px;">PNG</button>
+                        <button id="export-pdf-dialog" style="margin: 10px; padding: 10px;">PDF</button>
+                        <button id="save-layout-dialog" style="margin: 10px; padding: 10px;">Save Layout</button>
+                        <button id="load-layout-dialog" style="margin: 10px; padding: 10px;">Load Layout</button>
+                        <button id="cancel-export" style="margin: 10px; padding: 10px;">Cancel</button>
+                    </div>
+                `;
+                document.body.appendChild(exportDialog);
+
+                // Export PNG
+                document.getElementById('export-png-dialog').addEventListener('click', () => {
+                    try {
+                        const pngContent = cy.png({
+                            scale: 2,  // Higher resolution
+                            full: true  // Capture entire graph
+                        });
+                        const link = document.createElement('a');
+                        link.href = pngContent;
+                        link.download = 'diagram.png';
+                        link.click();
+                        document.body.removeChild(exportDialog);
+                    } catch (error) {
+                        console.error('PNG Export failed:', error);
+                        alert('Failed to export PNG. Check console for details.');
+                    }
+                });
+
+                // Export PDF
+                document.getElementById('export-pdf-dialog').addEventListener('click', async () => {
+                    try {
+                        const pdfContent = await cytoscape.exporters.pdf(cy, {
+                            scale: 2,
+                            full: true
+                        });
+                        const blob = new Blob([pdfContent], { type: 'application/pdf' });
+                        const link = document.createElement('a');
+                        link.href = URL.createObjectURL(blob);
+                        link.download = 'diagram.pdf';
+                        link.click();
+                        document.body.removeChild(exportDialog);
+                    } catch (error) {
+                        console.error('PDF Export failed:', error);
+                        alert('Failed to export PDF. Check console for details.');
+                    }
+                });
+
+                  // Save Layout
+                    document.getElementById('save-layout-dialog').addEventListener('click', () => {
+                        saveLayout();
+                        document.body.removeChild(exportDialog);
+                    });
+
+                    // Load Layout
+                    document.getElementById('load-layout-dialog').addEventListener('click', () => {
+                        loadLayout();
+                        document.body.removeChild(exportDialog);
+                    });
+
+                // Cancel button
+                document.getElementById('cancel-export').addEventListener('click', () => {
+                    document.body.removeChild(exportDialog);
+                });
+            }
+            
+        });
+    </script>
+</body>
+</html>

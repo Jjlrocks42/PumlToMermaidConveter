@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Interactive Class Diagram</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+    <style>
+        body { 
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        #cy {
+            width: 100%;
+            height: 85vh;
+            position: relative;
+            background: #f8f9fa;
+        }
+        .controls {
+            padding: 10px;
+            background: #fff;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .controls button {
+            padding: 8px 15px;
+            margin: 0 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+        }
+        .controls button:hover {
+            background: #f0f0f0;
+        }
+        #class-info {
+            position: fixed;
+            right: 20px;
+            top: 80px;
+            width: 300px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: none;
+        }
+        #class-info h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .method, .attribute {
+            margin: 5px 0;
+            padding: 3px 0;
+        }
+        .visibility {
+            display: inline-block;
+            width: 20px;
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div>
+            <button onclick="cy.fit()">Fit to View</button>
+            <button onclick="cy.center()">Center</button>
+            <button onclick="resetLayout()">Reset Layout</button>
+        </div>
+        <div>
+            <button onclick="cy.zoom({level: cy.zoom() * 1.2})">Zoom In</button>
+            <button onclick="cy.zoom({level: cy.zoom() * 0.8})">Zoom Out</button>
+        </div>
+    </div>
+    
+    <div id="cy"></div>
+    <div id="class-info">
+        <h3>Class Details</h3>
+        <div id="class-details"></div>
+    </div>
+
+    <script>
+        // Initialize Cytoscape
+        var cy = cytoscape({
+            container: document.getElementById('cy'),
+            style: [
+                {
+                    selector: 'node',
+                    style: {
+                        'label': 'data(label)',
+                        'background-color': '#fff',
+                        'border-width': 2,
+                        'border-color': '#666',
+                        'shape': 'rectangle',
+                        'width': 'label',
+                        'height': 'label',
+                        'padding': '10px',
+                        'text-valign': 'center',
+                        'text-halign': 'center',
+                        'font-size': '12px',
+                        'text-wrap': 'wrap',
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 2,
+                        'line-color': '#666',
+                        'target-arrow-color': '#666',
+                        'target-arrow-shape': 'triangle',
+                        'curve-style': 'bezier'
+                    }
+                },
+                {
+                    selector: '.interface',
+                    style: {
+                        'border-style': 'dashed'
+                    }
+                },
+                {
+                    selector: '.abstract',
+                    style: {
+                        'background-color': '#f8f9fa'
+                    }
+                },
+                {
+                    selector: '.highlighted',
+                    style: {
+                        'border-color': '#007bff',
+                        'border-width': 3
+                    }
+                }
+            ],
+            layout: {
+                name: 'cose',
+                padding: 50
+            }
+        });
+
+        // Sample data structure - this will be populated by the Python converter
+        const classData = {
+            nodes: [
+                // Example node structure:
+                // { 
+                //     data: { 
+                //         id: 'class1', 
+                //         label: 'ClassName',
+                //         type: 'class',
+                //         methods: [{name: 'method1', visibility: '+', params: '(x, y)'}],
+                //         attributes: [{name: 'attr1', visibility: '-'}],
+                //         description: 'Class description'
+                //     } 
+                // }
+            ],
+            edges: [
+                // Example edge structure:
+                // { 
+                //     data: { 
+                //         source: 'class1', 
+                //         target: 'class2', 
+                //         type: 'inheritance'
+                //     } 
+                // }
+            ]
+        };
+
+        // Add elements to the graph
+        cy.add(classData.nodes);
+        cy.add(classData.edges);
+
+        // Event handlers
+        cy.on('tap', 'node', function(evt) {
+            const node = evt.target;
+            const data = node.data();
+            
+            // Remove previous highlights
+            cy.elements().removeClass('highlighted');
+            node.addClass('highlighted');
+            
+            // Update class info panel
+            const infoPanel = document.getElementById('class-info');
+            const details = document.getElementById('class-details');
+            
+            let html = `<p><strong>Type:</strong> ${data.type}</p>`;
+            if (data.description) {
+                html += `<p>${data.description}</p>`;
+            }
+            
+            if (data.attributes && data.attributes.length > 0) {
+                html += '<h4>Attributes</h4>';
+                data.attributes.forEach(attr => {
+                    html += `<div class="attribute">
+                        <span class="visibility">${attr.visibility}</span>
+                        ${attr.name}
+                    </div>`;
+                });
+            }
+            
+            if (data.methods && data.methods.length > 0) {
+                html += '<h4>Methods</h4>';
+                data.methods.forEach(method => {
+                    html += `<div class="method">
+                        <span class="visibility">${method.visibility}</span>
+                        ${method.name}${method.params}
+                    </div>`;
+                });
+            }
+            
+            details.innerHTML = html;
+            infoPanel.style.display = 'block';
+        });
+
+        cy.on('tap', function(evt) {
+            if (evt.target === cy) {
+                // Clicked on background
+                cy.elements().removeClass('highlighted');
+                document.getElementById('class-info').style.display = 'none';
+            }
+        });
+
+        function resetLayout() {
+            cy.layout({
+                name: 'cose',
+                padding: 50
+            }).run();
+        }
+    </script>
+</body>
+</html>
